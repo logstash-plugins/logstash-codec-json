@@ -1,3 +1,4 @@
+require "logstash/devutils/rspec/spec_helper"
 require "logstash/codecs/json"
 require "logstash/event"
 require "logstash/json"
