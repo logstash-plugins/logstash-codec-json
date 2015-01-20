@@ -10,7 +10,6 @@ require "logstash/json"
 class LogStash::Codecs::JSON < LogStash::Codecs::Base
   config_name "json"
 
-  milestone 3
 
   # The character encoding used in this codec. Examples include "UTF-8" and
   # "CP1252".
