@@ -64,6 +64,29 @@ describe LogStash::Codecs::JSON do
         insist { decoded } == true
       end
     end
+
+    context "when json could not be parsed" do
+
+      let(:message)    { "random_message" }
+
+      it "add the failure tag" do
+        subject.decode(message) do |event|
+          expect(event).to include "tags"
+        end
+      end
+
+      it "uses an array to store the tags" do
+        subject.decode(message) do |event|
+          expect(event['tags']).to be_a Array
+        end
+      end
+
+      it "add a json parser failure tag" do
+        subject.decode(message) do |event|
+          expect(event['tags']).to include "_jsonparsefailure"
+        end
+      end
+    end
   end
 
   context "#encode" do
