@@ -4,7 +4,9 @@ require "logstash/util/charset"
 require "logstash/json"
 
 # This codec may be used to decode (via inputs) and encode (via outputs)
-# full JSON messages.  If you are streaming JSON messages delimited
+# full JSON messages. If the data being sent is a JSON array at its root multiple events will be created (one per element).
+#
+# If you are streaming JSON messages delimited
 # by '\n' then see the `json_lines` codec.
 #
 # Encoding will result in a compact JSON representation (no line terminators or indentation)
@@ -37,7 +39,13 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
   def decode(data)
     data = @converter.convert(data)
     begin
-      yield LogStash::Event.new(LogStash::Json.load(data))
+      decoded = LogStash::Json.load(data)
+      if decoded.is_a?(Array)
+        decoded.each {|item| yield(LogStash::Event.new(item)) }
+      else
+        yield LogStash::Event.new(decoded)
+      end
+
     rescue LogStash::Json::ParserError => e
       @logger.info("JSON parse failure. Falling back to plain-text", :error => e, :data => data)
       yield LogStash::Event.new("message" => data, "tags" => ["_jsonparsefailure"])
