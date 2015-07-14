@@ -52,6 +52,34 @@ describe LogStash::Codecs::JSON do
       end
     end
 
+    context "processing JSON with an array root" do
+      let(:data) {
+        [
+          {"foo" => "bar"},
+          {"foo" => "baz"}
+        ]
+      }
+      let(:data_json) {
+        LogStash::Json.dump(data)
+      }
+
+      it "should yield multiple events" do
+        count = 0
+        subject.decode(data_json) do |event|
+          count += 1
+        end
+        expect(count).to eql(data.count)
+      end
+
+      it "should yield the correct objects" do
+        index = 0
+        subject.decode(data_json) do |event|
+          expect(event.to_hash).to include(data[index])
+          index += 1
+        end
+      end
+    end
+
     context "processing weird binary blobs" do
       it "falls back to plain text and doesn't crash (LOGSTASH-1595)" do
         decoded = false
