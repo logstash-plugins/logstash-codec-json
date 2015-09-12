@@ -41,11 +41,16 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
     begin
       decoded = LogStash::Json.load(data)
       if decoded.is_a?(Array)
-        decoded.each {|item| yield(LogStash::Event.new(item)) }
+        decoded.each do |item|
+          # Event constructor handles only hash maps
+          raise LogStash::Json::ParserError, "JSON data doesn't represent a hash map" unless item.respond_to?("keys")
+          yield(LogStash::Event.new(item))
+        end
       else
+        # Event constructor handles only hash maps
+        raise LogStash::Json::ParserError, "JSON data doesn't represent a hash map" unless decoded.respond_to?("keys")
         yield LogStash::Event.new(decoded)
       end
-
     rescue LogStash::Json::ParserError => e
       @logger.info("JSON parse failure. Falling back to plain-text", :error => e, :data => data)
       yield LogStash::Event.new("message" => data, "tags" => ["_jsonparsefailure"])
