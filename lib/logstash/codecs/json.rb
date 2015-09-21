@@ -42,13 +42,24 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
       decoded = LogStash::Json.load(data)
       if decoded.is_a?(Array)
         decoded.each {|item| yield(LogStash::Event.new(item)) }
-      else
+      elsif decoded.is_a?(Hash)
         yield LogStash::Event.new(decoded)
+      else
+        @logger.info? && @logger.info("JSON codec received a scalar instead of an Arary or Object!", :data => data)
+        yield LogStash::Event.new("message" => data, "tags" => ["_jsonparsefailure"])
       end
 
     rescue LogStash::Json::ParserError => e
       @logger.info("JSON parse failure. Falling back to plain-text", :error => e, :data => data)
       yield LogStash::Event.new("message" => data, "tags" => ["_jsonparsefailure"])
+    rescue StandardError => e
+      # This should NEVER happen. But hubris has been the cause of many pipeline breaking things
+      # If something bad should happen we just don't want to crash logstash here.
+      @logger.warn("An unexpected error occurred parsing input to JSON",
+                   :input => data,
+                   :message => e.message,
+                   :class => e.class.name,
+                   :backtrace => e.backtrace)
     end
   end # def decode
 
