@@ -153,7 +153,7 @@ describe LogStash::Codecs::JSON do
       event = LogStash::Event.new(data)
       got_event = false
       subject.on_event do |e, d|
-        insist { d.chomp } == LogStash::Event.new(data).to_json
+        insist { d.chomp } == event.to_json
         insist { LogStash::Json.load(d)["foo"] } == data["foo"]
         insist { LogStash::Json.load(d)["baz"] } == data["baz"]
         insist { LogStash::Json.load(d)["bah"] } == data["bah"]
