@@ -1,3 +1,6 @@
+## 2.0.4
+ - Reduce the size of the gem by removing the vendor files
+
 ## 2.0.3
  - fixed a spec, no change in functionality
 
