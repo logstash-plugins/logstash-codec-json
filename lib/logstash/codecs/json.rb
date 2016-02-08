@@ -17,7 +17,6 @@ require "logstash/json"
 class LogStash::Codecs::JSON < LogStash::Codecs::Base
   config_name "json"
 
-
   # The character encoding used in this codec. Examples include "UTF-8" and
   # "CP1252".
   #
@@ -29,43 +28,57 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
   # For nxlog users, you may to set this to "CP1252".
   config :charset, :validate => ::Encoding.name_list, :default => "UTF-8"
 
-  public
   def register
     @converter = LogStash::Util::Charset.new(@charset)
     @converter.logger = @logger
   end
 
-  public
-  def decode(data)
-    data = @converter.convert(data)
-    begin
-      decoded = LogStash::Json.load(data)
-      if decoded.is_a?(Array)
-        decoded.each {|item| yield(LogStash::Event.new(item)) }
-      elsif decoded.is_a?(Hash)
-        yield LogStash::Event.new(decoded)
-      else
-        @logger.info? && @logger.info("JSON codec received a scalar instead of an Arary or Object!", :data => data)
-        yield LogStash::Event.new("message" => data, "tags" => ["_jsonparsefailure"])
-      end
+  def decode(data, &block)
+    parse(@converter.convert(data), &block)
+  end
 
-    rescue LogStash::Json::ParserError => e
-      @logger.info("JSON parse failure. Falling back to plain-text", :error => e, :data => data)
-      yield LogStash::Event.new("message" => data, "tags" => ["_jsonparsefailure"])
-    rescue StandardError => e
-      # This should NEVER happen. But hubris has been the cause of many pipeline breaking things
-      # If something bad should happen we just don't want to crash logstash here.
-      @logger.warn("An unexpected error occurred parsing input to JSON",
-                   :input => data,
-                   :message => e.message,
-                   :class => e.class.name,
-                   :backtrace => e.backtrace)
-    end
-  end # def decode
-
-  public
   def encode(event)
     @on_event.call(event, event.to_json)
-  end # def encode
+  end
 
-end # class LogStash::Codecs::JSON
+  private
+
+  def from_json_parse(json, &block)
+    LogStash::Event.from_json(json).each { |event| yield event }
+  rescue LogStash::Json::ParserError => e
+    @logger.error("JSON parse error, original data now in message field", :error => e, :data => json)
+    yield LogStash::Event.new("message" => json, "tags" => ["_jsonparsefailure"])
+  end
+
+  def legacy_parse(json, &block)
+    decoded = LogStash::Json.load(json)
+
+    case decoded
+    when Array
+      decoded.each {|item| yield(LogStash::Event.new(item)) }
+    when Hash
+      yield LogStash::Event.new(decoded)
+    else
+      @logger.error("JSON codec is expecting array or object/map", :data => json)
+      yield LogStash::Event.new("message" => json, "tags" => ["_jsonparsefailure"])
+    end
+  rescue LogStash::Json::ParserError => e
+    @logger.error("JSON parse failure. Falling back to plain-text", :error => e, :data => json)
+    yield LogStash::Event.new("message" => json, "tags" => ["_jsonparsefailure"])
+  rescue StandardError => e
+    # This should NEVER happen. But hubris has been the cause of many pipeline breaking things
+    # If something bad should happen we just don't want to crash logstash here.
+    @logger.warn(
+      "An unexpected error occurred parsing JSON data",
+      :data => json,
+      :message => e.message,
+      :class => e.class.name,
+      :backtrace => e.backtrace
+    )
+  end
+
+  # keep compatibility with all v2.x distributions. only in 2.3 will the Event#from_json method be introduced
+  # and we need to keep compatibility for all v2 releases.
+  alias_method :parse, LogStash::Event.respond_to?(:from_json) ? :from_json_parse : :legacy_parse
+
+end
