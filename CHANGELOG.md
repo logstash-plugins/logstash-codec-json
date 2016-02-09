@@ -1,3 +1,6 @@
+## 2.1.0
+ - Backward compatible support for `Event#from_json` method https://github.com/logstash-plugins/logstash-codec-json/pull/21
+
 ## 2.0.4
  - Reduce the size of the gem by removing the vendor files
 
