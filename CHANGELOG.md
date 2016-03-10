@@ -1,3 +1,6 @@
+## 2.1.1
+ - Properly require 'logstash/event' for use in unit tests
+
 ## 2.1.0
  - Backward compatible support for `Event#from_json` method https://github.com/logstash-plugins/logstash-codec-json/pull/21
 

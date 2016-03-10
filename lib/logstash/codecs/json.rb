@@ -2,6 +2,7 @@
 require "logstash/codecs/base"
 require "logstash/util/charset"
 require "logstash/json"
+require "logstash/event"
 
 # This codec may be used to decode (via inputs) and encode (via outputs)
 # full JSON messages. If the data being sent is a JSON array at its root multiple events will be created (one per element).
