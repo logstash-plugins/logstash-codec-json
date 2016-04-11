@@ -1,3 +1,7 @@
+# 2.1.4
+  - Made 'Falling back to plain-text' log message an 'info' level log. This was
+    'error' for versions v2.1.0 through v2.1.3 (and was 'info' before that).
+
 # 2.1.3
   - Depend on logstash-core-plugin-api instead of logstash-core, removing the need to mass update plugins on major releases of logstash
 # 2.1.2
