@@ -64,7 +64,7 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
       yield LogStash::Event.new("message" => json, "tags" => ["_jsonparsefailure"])
     end
   rescue LogStash::Json::ParserError => e
-    @logger.error("JSON parse failure. Falling back to plain-text", :error => e, :data => json)
+    @logger.info("JSON parse failure. Falling back to plain-text", :error => e, :data => json)
     yield LogStash::Event.new("message" => json, "tags" => ["_jsonparsefailure"])
   rescue StandardError => e
     # This should NEVER happen. But hubris has been the cause of many pipeline breaking things
