@@ -16,9 +16,9 @@ describe LogStash::Codecs::JSON do
         data = {"foo" => "bar", "baz" => {"bah" => ["a","b","c"]}}
         subject.decode(LogStash::Json.dump(data)) do |event|
           insist { event.is_a? LogStash::Event }
-          insist { event["foo"] } == data["foo"]
-          insist { event["baz"] } == data["baz"]
-          insist { event["bah"] } == data["bah"]
+          insist { event.get("foo") } == data["foo"]
+          insist { event.get("baz") } == data["baz"]
+          insist { event.get("bah") } == data["bah"]
         end
       end
 
@@ -47,8 +47,8 @@ describe LogStash::Codecs::JSON do
           subject.decode("something that isn't json") do |event|
             decoded = true
             insist { event.is_a?(LogStash::Event) }
-            insist { event["message"] } == "something that isn't json"
-            insist { event["tags"] }.include?("_jsonparsefailure")
+            insist { event.get("message") } == "something that isn't json"
+            insist { event.get("tags") }.include?("_jsonparsefailure")
           end
           insist { decoded } == true
         end
@@ -69,11 +69,11 @@ describe LogStash::Codecs::JSON do
             end
 
             it "should store the value in 'message'" do
-              expect(event["message"]).to eql(value_json)
+              expect(event.get("message")).to eql(value_json)
             end
 
             it "should have the json parse failure tag" do
-              expect(event["tags"]).to include("_jsonparsefailure")
+              expect(event.get("tags")).to include("_jsonparsefailure")
             end
           end
         end
@@ -119,7 +119,7 @@ describe LogStash::Codecs::JSON do
           subject.decode(blob) do |event|
             decoded = true
             insist { event.is_a?(LogStash::Event) }
-            insist { event["message"].encoding.to_s } == "UTF-8"
+            insist { event.get("message").encoding.to_s } == "UTF-8"
           end
           insist { decoded } == true
         end
@@ -137,13 +137,13 @@ describe LogStash::Codecs::JSON do
 
         it "uses an array to store the tags" do
           subject.decode(message) do |event|
-            expect(event['tags']).to be_a Array
+            expect(event.get('tags')).to be_a Array
           end
         end
 
         it "add a json parser failure tag" do
           subject.decode(message) do |event|
-            expect(event['tags']).to include "_jsonparsefailure"
+            expect(event.get('tags')).to include "_jsonparsefailure"
           end
         end
       end
