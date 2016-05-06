@@ -1,3 +1,5 @@
+## 3.0.0
+  - Update the plugin to the version 2.0 of the plugin api, this change is required for Logstash 5.0 compatibility. See https://github.com/elastic/logstash/issues/5141
 # 2.1.4
   - Made 'Falling back to plain-text' log message an 'info' level log. This was
     'error' for versions v2.1.0 through v2.1.3 (and was 'info' before that).
