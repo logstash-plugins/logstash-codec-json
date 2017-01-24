@@ -12,7 +12,7 @@ require "logstash/event"
 #
 # Encoding will result in a compact JSON representation (no line terminators or indentation)
 #
-# If this codec recieves a payload from an input that is not valid JSON, then
+# If this codec receives a payload from an input that is not valid JSON, then
 # it will fall back to plain text and add a tag `_jsonparsefailure`. Upon a JSON
 # failure, the payload will be stored in the `message` field.
 class LogStash::Codecs::JSON < LogStash::Codecs::Base
