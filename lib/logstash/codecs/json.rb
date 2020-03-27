@@ -4,6 +4,9 @@ require "logstash/util/charset"
 require "logstash/json"
 require "logstash/event"
 
+require 'logstash/plugin_mixins/ecs_compatibility_support'
+require 'logstash/plugin_mixins/event_support'
+
 # This codec may be used to decode (via inputs) and encode (via outputs)
 # full JSON messages. If the data being sent is a JSON array at its root multiple events will be created (one per element).
 #
@@ -16,6 +19,10 @@ require "logstash/event"
 # it will fall back to plain text and add a tag `_jsonparsefailure`. Upon a JSON
 # failure, the payload will be stored in the `message` field.
 class LogStash::Codecs::JSON < LogStash::Codecs::Base
+
+  include LogStash::PluginMixins::ECSCompatibilitySupport
+  include LogStash::PluginMixins::EventSupport
+
   config_name "json"
 
   # The character encoding used in this codec. Examples include "UTF-8" and
@@ -28,6 +35,11 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
   #
   # For nxlog users, you may to set this to "CP1252".
   config :charset, :validate => ::Encoding.name_list, :default => "UTF-8"
+
+  # Defines a target field for placing decoded fields.
+  # If this setting is omitted, data gets stored at the root (top level) of the event.
+  # The target is only relevant while decoding data into a new event.
+  config :target, :validate => :string
 
   def register
     @converter = LogStash::Util::Charset.new(@charset)
@@ -45,7 +57,11 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
   private
 
   def from_json_parse(json, &block)
-    LogStash::Event.from_json(json).each { |event| yield event }
+    LogStash::Event.from_json(json).each do |event|
+      event_factory.normalize(event)
+      move_event_data(event, target)
+      yield event
+    end
   rescue LogStash::Json::ParserError => e
     @logger.error("JSON parse error, original data now in message field", :error => e, :data => json)
     yield LogStash::Event.new("message" => json, "tags" => ["_jsonparsefailure"])
