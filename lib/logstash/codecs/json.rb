@@ -29,6 +29,18 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
   # For nxlog users, you may to set this to "CP1252".
   config :charset, :validate => ::Encoding.name_list, :default => "UTF-8"
 
+  # When specified, build a json object based on the mapping structure,
+  # taking necessary information from event.
+  # This setting allows you to build specific JSON object inside an output configuration that support codecs.
+  #
+  # * JSON key can either be literal string  `"abc"` or interpolated string `"%{[event_accessor][subfield]}"`
+  # * JSON value can either be literal scalar,array,object or interpolated string `"%{[field]}"`, or part of the event `"[field][nested_field]"` (array,hash or scalar)
+  #
+  # The difference between using interpolated string `"%{[field]}"` or only the accessor `"[field]"` is the resulting element type.
+  # Using Interpolated string will always return a string value, while accessor will directly inject the event field as-is if it is an integer,boolean
+  #
+  config :encode_mapping, :validate => :hash
+
   def register
     @converter = LogStash::Util::Charset.new(@charset)
     @converter.logger = @logger
@@ -38,8 +50,40 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
     parse(@converter.convert(data), &block)
   end
 
+  def build_mapping(event, mapping)
+    map = Hash.new
+    mapping.each do |key, value|
+      k = event.sprintf(key)
+      v = build_mapping_value(event,value)
+      map[k] = v
+    end
+    return map
+  end
+
+  def build_mapping_value(event,value)
+    if value.is_a?(Hash)
+      v = build_mapping(event, value)
+    elsif value.is_a?(Array)
+      v = value.map do |val|
+        build_mapping_value(event, val)
+      end
+    else
+      if /^(?:\[[^\[\]]+\])+$/.match(value)
+        v = event.get(value)
+      else
+        v = event.sprintf(value)
+      end
+    end
+    return v
+  end
+
   def encode(event)
-    @on_event.call(event, event.to_json)
+    if @encode_mapping
+      encode_result = LogStash::Json.dump(build_mapping(event,@encode_mapping))
+    else
+      encode_result = event.to_json
+    end
+    @on_event.call(event, encode_result)
   end
 
   private

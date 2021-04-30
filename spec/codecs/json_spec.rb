@@ -149,6 +149,105 @@ describe LogStash::Codecs::JSON do
       end
     end
 
+    context "#build_mapping" do
+
+      context "event sprintf on key" do
+        it "should interpolate mapping key with sprintf syntax" do
+          mapping = { "%{my_key}" => "%{int}", "prefixed_%{my_key}" => "%{int}"}
+          data = { "my_key" => "abc", "int" => 123 }
+          event = LogStash::Event.new(data)
+          result = subject.build_mapping(event,mapping)
+          insist { result } == { "abc" => "123", "prefixed_abc" => "123" }
+        end
+      end
+
+      context "event sprintf on value" do
+
+        it "should interpolate event fields that are scalar" do
+          mapping = { "int" => "%{int}", "double" => "%{double}" ,"bar" => "%{string}", "baz" => "%{bool}"}
+          data = { "int" => 123, "double" => 123.4 ,"string" => "string content", "bool" => false}
+          event = LogStash::Event.new(data)
+          result = subject.build_mapping(event,mapping)
+          insist { result } == { "int" => "123", "double" => "123.4","bar" => "string content", "baz" => "false" }
+        end
+
+        it "should interpolate event fields that are array" do
+          mapping = { "foo" => "%{[baz][bah]}"}
+          data = {"foo" => "bar", "baz" => {"bah" => ["a","b","c"]}}
+          event = LogStash::Event.new(data)
+          result = subject.build_mapping(event,mapping)
+          insist { result } == { "foo" => "a,b,c" }
+        end
+
+        #Documenting the current behaviour, not expected to be used
+        it "should interpolate event fields that are hash" do
+          mapping = { "foo" => "%{[baz]}"}
+          data = {"foo" => "bar", "baz" => {"bah" => ["a","b","c"]}}
+          event = LogStash::Event.new(data)
+          result = subject.build_mapping(event,mapping)
+          insist { result } == { "foo" => "{\"bah\":[\"a\",\"b\",\"c\"]}" }
+        end
+      end
+
+      context "event accessor on value" do
+
+        it "should include event fields that are scalar" do
+          mapping = { "int" => "[int]", "double" => "[double]" ,"bar" => "[string]", "baz" => "[bool]"}
+          data = { "int" => 123, "double" => 123.4 ,"string" => "string content", "bool" => false}
+          event = LogStash::Event.new(data)
+          result = subject.build_mapping(event,mapping)
+          insist { result } == { "int" => 123, "double" => 123.4,"bar" => "string content", "baz" => false }
+        end
+
+        #keep object type (hash/number/boolean)
+        it "should include event field from accessor string" do
+          mapping = { "foo" => "[baz][bah]"}
+          data = {"foo" => "bar", "baz" => {"bah" => ["a","b","c"]}}
+          event = LogStash::Event.new(data)
+          result = subject.build_mapping(event,mapping)
+          insist { result } == { "foo" => ["a","b","c"] }
+        end
+      end
+      context "with mapping nested_hash" do
+        it "should support hash nested in hash" do
+          mapping = { "int" => "[int]", "nested_hash" => { "nested_hash-2" => {"foo" => "[bool]"}, "bar" => "%{bool}"} }
+          data = { "int" => 123, "double" => 123.4 ,"string" => "string content", "bool" => false}
+          event = LogStash::Event.new(data)
+          result = subject.build_mapping(event,mapping)
+          insist { result } == { "int" => 123, "nested_hash" => { "nested_hash-2" => {"foo" => false}, "bar" => "false"} }
+        end
+      end
+
+      context "with mapping array" do
+        it "should create array from event field accessor string" do
+          mapping = { "array" => [ "[int]", "[double]", "[string]", "[bool]" ] }
+          data = { "int" => 123, "double" => 123.4 ,"string" => "string content", "bool" => false}
+          event = LogStash::Event.new(data)
+          result = subject.build_mapping(event,mapping)
+          insist { result } == { "array" => [123, 123.4, "string content", false] }
+        end
+      end
+
+      context "with complex mapping array of hash && hash of array" do
+        it "should support array nested in array" do
+          mapping = { "array" => [ "[int]", "[double]", "[string]", "nested_array" => [ "[int]", "[double]" ] ] }
+          data = { "int" => 123, "double" => 123.4 ,"string" => "string content", "bool" => false}
+          event = LogStash::Event.new(data)
+          result = subject.build_mapping(event,mapping)
+          insist { result } == { "array" => [123, 123.4, "string content", "nested_array" => [123,123.4]] }
+        end
+
+        it "should support hash nested in array" do
+          mapping = { "array" => [ "[int]", "[double]", "[string]", "nested_hash" => { "foo" => "[bool]", "bar" => "%{bool}"} ] }
+          data = { "int" => 123, "double" => 123.4 ,"string" => "string content", "bool" => false}
+          event = LogStash::Event.new(data)
+          result = subject.build_mapping(event,mapping)
+          insist { result } == { "array" => [123, 123.4, "string content", "nested_hash" => { "foo" => false, "bar" => "false"}] }
+        end
+
+      end
+    end
+
     context "#encode" do
       it "should return json data" do
         data = {"foo" => "bar", "baz" => {"bah" => ["a","b","c"]}}
@@ -164,6 +263,23 @@ describe LogStash::Codecs::JSON do
         subject.encode(event)
         insist { got_event }
       end
+    end
+  end
+
+  context "#encode with mapping" do
+    subject do
+      LogStash::Codecs::JSON.new("encode_mapping" => {"prefixed_%{foo}" => "[baz][bah]"})
+    end
+    it "should return mapped json data" do
+      data = {"foo" => "bar", "baz" => {"bah" => ["a","b","c"]}}
+      event = LogStash::Event.new(data)
+      got_event = false
+      subject.on_event do |e, d|
+        insist { LogStash::Json.load(d) } == { "prefixed_bar" => ["a","b","c"]}
+        got_event = true
+      end
+      subject.encode(event)
+      insist { got_event }
     end
   end
 
@@ -187,5 +303,4 @@ describe LogStash::Codecs::JSON do
       # do nothing
     end
   end
-
 end
