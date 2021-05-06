@@ -5,7 +5,6 @@ require "logstash/json"
 require "logstash/event"
 
 require 'logstash/plugin_mixins/ecs_compatibility_support'
-require 'logstash/plugin_mixins/event_support'
 
 # This codec may be used to decode (via inputs) and encode (via outputs)
 # full JSON messages. If the data being sent is a JSON array at its root multiple events will be created (one per element).
@@ -21,7 +20,6 @@ require 'logstash/plugin_mixins/event_support'
 class LogStash::Codecs::JSON < LogStash::Codecs::Base
 
   include LogStash::PluginMixins::ECSCompatibilitySupport
-  include LogStash::PluginMixins::EventSupport
 
   config_name "json"
 
@@ -57,13 +55,10 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
   private
 
   def from_json_parse(json, &block)
-    LogStash::Event.from_json(json).each do |event|
-      event_factory.normalize(event)
-      move_event_data(event, target)
-      yield event
-    end
+    LogStash::Event.from_json(json).each { |event| yield event }
   rescue LogStash::Json::ParserError => e
-    @logger.error("JSON parse error, original data now in message field", :error => e, :data => json)
+    @logger.error("JSON parse error, original data now in message field",
+        :exception => e.class, :message => e.message, :data => json)
     yield LogStash::Event.new("message" => json, "tags" => ["_jsonparsefailure"])
   end
 
