@@ -66,8 +66,8 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
       @logger.error("JSON type error, original data now in message field", type: decoded.class, data: json)
       yield parse_error_event(json)
     end
-  rescue LogStash::Json::ParserError => e
-    @logger.error("JSON parse error, original data now in message field", message: e.message, data: json)
+  rescue => e
+    @logger.error("JSON parse error, original data now in message field", message: e.message, exception: e.class, data: json)
     yield parse_error_event(json)
   end
 
