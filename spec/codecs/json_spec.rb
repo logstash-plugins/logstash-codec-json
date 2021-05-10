@@ -5,8 +5,11 @@ require "logstash/json"
 require "insist"
 
 describe LogStash::Codecs::JSON do
+
+  let(:options) { Hash.new }
+
   subject do
-    LogStash::Codecs::JSON.new
+    LogStash::Codecs::JSON.new(options)
   end
 
   shared_examples :codec do
@@ -127,7 +130,7 @@ describe LogStash::Codecs::JSON do
 
       context "when json could not be parsed" do
 
-        let(:message)    { "random_message" }
+        let(:message) { "random_message" }
 
         it "add the failure tag" do
           subject.decode(message) do |event|
@@ -167,25 +170,8 @@ describe LogStash::Codecs::JSON do
     end
   end
 
-  context "forcing legacy parsing" do
-    it_behaves_like :codec do
-      before(:each) do
-        # stub codec parse method to force use of the legacy parser.
-        # this is very implementation specific but I am not sure how
-        # this can be tested otherwise.
-        allow(subject).to receive(:parse) do |data, &block|
-          subject.send(:legacy_parse, data, &block)
-        end
-      end
-    end
-  end
-
   context "default parser choice" do
-    # here we cannot force the use of the Event#from_json since if this test is run in the
-    # legacy context (no Java Event) it will fail but if in the new context, it will be picked up.
-    it_behaves_like :codec do
-      # do nothing
-    end
+    it_behaves_like :codec
   end
 
 end
