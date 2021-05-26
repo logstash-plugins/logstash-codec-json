@@ -3,8 +3,9 @@ require "logstash/codecs/base"
 require "logstash/util/charset"
 require "logstash/json"
 require "logstash/event"
-
 require 'logstash/plugin_mixins/ecs_compatibility_support'
+require 'logstash/plugin_mixins/ecs_compatibility_support/target_check'
+require 'logstash/plugin_mixins/validator_support/field_reference_validation_adapter'
 
 # This codec may be used to decode (via inputs) and encode (via outputs)
 # full JSON messages. If the data being sent is a JSON array at its root multiple events will be created (one per element).
@@ -20,11 +21,14 @@ require 'logstash/plugin_mixins/ecs_compatibility_support'
 class LogStash::Codecs::JSON < LogStash::Codecs::Base
 
   include LogStash::PluginMixins::ECSCompatibilitySupport
+  include LogStash::PluginMixins::ECSCompatibilitySupport::TargetCheck
+
+  extend LogStash::PluginMixins::ValidatorSupport::FieldReferenceValidationAdapter
 
   config_name "json"
 
-  # The character encoding used in this codec. Examples include "UTF-8" and
-  # "CP1252".
+  # The character encoding used in this codec.
+  # Examples include "UTF-8" and "CP1252".
   #
   # JSON requires valid UTF-8 strings, but in some cases, software that
   # emits JSON does so in another encoding (nxlog, for example). In
@@ -37,7 +41,9 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
   # Defines a target field for placing decoded fields.
   # If this setting is omitted, data gets stored at the root (top level) of the event.
   # The target is only relevant while decoding data into a new event.
-  config :target, :validate => :string
+  #
+  # NOTE: if the `target` field already exists, it will be overwritten!
+  config :target, :validate => :field_reference
 
   def register
     @converter = LogStash::Util::Charset.new(@charset)
