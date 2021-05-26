@@ -150,9 +150,44 @@ describe LogStash::Codecs::JSON do
           end
         end
       end
+            expect( event.get("[root][baz]")['1'] ).to be true
+          end
+          expect( count ).to eql 1
+        end
+
+        it "parses json (array)" do
+          count = 0
+          subject.decode('[ {"foo": "bar"}, {"baz": { "v": 1.0 } }, {}]') do |event|
+            count += 1
+            expect( event.include?("foo") ).to be false
+            expect( event.include?("baz") ).to be false
+            expect( event.include?("root") ).to be true if count < 3
+          end
+          expect( count ).to eql 3
+        end
+
+      end
+
     end
 
     context "#encode" do
+      it "should return json data" do
+        data = {"foo" => "bar", "baz" => {"bah" => ["a","b","c"]}}
+        event = LogStash::Event.new(data)
+        got_event = false
+        subject.on_event do |e, d|
+          insist { d.chomp } == event.to_json
+          insist { LogStash::Json.load(d)["foo"] } == data["foo"]
+          insist { LogStash::Json.load(d)["baz"] } == data["baz"]
+          insist { LogStash::Json.load(d)["bah"] } == data["bah"]
+          got_event = true
+        end
+        subject.encode(event)
+        insist { got_event }
+      end
+    end
+
+    context "target" do
       it "should return json data" do
         data = {"foo" => "bar", "baz" => {"bah" => ["a","b","c"]}}
         event = LogStash::Event.new(data)

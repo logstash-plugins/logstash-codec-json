@@ -6,6 +6,8 @@ require "logstash/event"
 require 'logstash/plugin_mixins/ecs_compatibility_support'
 require 'logstash/plugin_mixins/ecs_compatibility_support/target_check'
 require 'logstash/plugin_mixins/validator_support/field_reference_validation_adapter'
+require 'logstash/plugin_mixins/event_support/event_factory_adapter'
+require 'logstash/plugin_mixins/event_support/from_json_helper'
 
 # This codec may be used to decode (via inputs) and encode (via outputs)
 # full JSON messages. If the data being sent is a JSON array at its root multiple events will be created (one per element).
@@ -24,6 +26,9 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
   include LogStash::PluginMixins::ECSCompatibilitySupport::TargetCheck
 
   extend LogStash::PluginMixins::ValidatorSupport::FieldReferenceValidationAdapter
+
+  include LogStash::PluginMixins::EventSupport::EventFactoryAdapter
+  include LogStash::PluginMixins::EventSupport::FromJsonHelper
 
   config_name "json"
 
@@ -48,6 +53,8 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
   def register
     @converter = LogStash::Util::Charset.new(@charset)
     @converter.logger = @logger
+
+    event_factory_builder.with_target(target).build # sets @event_factory
   end
 
   def decode(data, &block)
@@ -61,14 +68,14 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
   private
 
   def parse_json(json)
-    LogStash::Event.from_json(json).each { |event| yield event }
+    events_from_json(json).each { |event| yield event }
   rescue => e
     @logger.error("JSON parse error, original data now in message field", message: e.message, exception: e.class, data: json)
-    yield parse_error_event(json)
+    yield parse_json_error_event(json)
   end
 
-  def parse_error_event(json)
-    LogStash::Event.new("message" => json, "tags" => ["_jsonparsefailure"])
+  def parse_json_error_event(json)
+    event_factory.new_event("message" => json, "tags" => ["_jsonparsefailure"])
   end
 
 end
