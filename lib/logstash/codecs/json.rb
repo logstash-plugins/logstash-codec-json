@@ -45,7 +45,7 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
   end
 
   def decode(data, &block)
-    parse(@converter.convert(data), &block)
+    parse_json(@converter.convert(data), &block)
   end
 
   def encode(event)
@@ -54,18 +54,8 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
 
   private
 
-  def parse(json)
-    decoded = LogStash::Json.load(json)
-
-    case decoded
-    when Array
-      decoded.each { |item| yield(LogStash::Event.new(item)) }
-    when Hash
-      yield LogStash::Event.new(decoded)
-    else
-      @logger.error("JSON type error, original data now in message field", type: decoded.class, data: json)
-      yield parse_error_event(json)
-    end
+  def parse_json(json)
+    LogStash::Event.from_json(json).each { |event| yield event }
   rescue => e
     @logger.error("JSON parse error, original data now in message field", message: e.message, exception: e.class, data: json)
     yield parse_error_event(json)
