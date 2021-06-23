@@ -53,8 +53,6 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
   def register
     @converter = LogStash::Util::Charset.new(@charset)
     @converter.logger = @logger
-
-    event_factory_builder.with_target(target).build # sets @event_factory
   end
 
   def decode(data, &block)
@@ -68,7 +66,7 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
   private
 
   def parse_json(json)
-    events_from_json(json).each { |event| yield event }
+    events_from_json(json, targeted_event_factory).each { |event| yield event }
   rescue => e
     @logger.error("JSON parse error, original data now in message field", message: e.message, exception: e.class, data: json)
     yield parse_json_error_event(json)
