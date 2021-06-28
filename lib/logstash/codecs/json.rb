@@ -46,8 +46,6 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
   # Defines a target field for placing decoded fields.
   # If this setting is omitted, data gets stored at the root (top level) of the event.
   # The target is only relevant while decoding data into a new event.
-  #
-  # NOTE: if the `target` field already exists, it will be overwritten!
   config :target, :validate => :field_reference
 
   def register
