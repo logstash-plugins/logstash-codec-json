@@ -3,8 +3,9 @@ require "logstash/codecs/json"
 require "logstash/event"
 require "logstash/json"
 require "insist"
+require 'logstash/plugin_mixins/ecs_compatibility_support/spec_helper'
 
-describe LogStash::Codecs::JSON do
+describe LogStash::Codecs::JSON, :ecs_compatibility_support do
 
   let(:options) { Hash.new }
 
@@ -151,42 +152,77 @@ describe LogStash::Codecs::JSON do
         end
       end
 
-      context "with target" do
+      ecs_compatibility_matrix(:disabled, :v1, :v8 => :v1) do |ecs_select|
 
-        let(:options) { super().merge('target' => 'root') }
-
-        let(:message) { ' { "foo": "bar", "baz": { "0": [1, 2, 3], "1": true } } ' }
-
-        it "parses json" do
-          count = 0
-          subject.decode('{ "foo": "bar", "baz": { "0": [1, 2, 3], "1": true } } ') do |event|
-            count += 1
-            expect( event.include?("foo") ).to be false
-            expect( event.include?("baz") ).to be false
-            expect( event.get("[root][foo]") ).to eql 'bar'
-            expect( event.get("[root][baz]")['1'] ).to be true
-          end
-          expect( count ).to eql 1
+        before(:each) do
+          allow_any_instance_of(described_class).to receive(:ecs_compatibility).and_return(ecs_compatibility)
         end
 
-        it "parses json (array)" do
-          count = 0
-          subject.decode('[ {"foo": "bar"}, {"baz": { "v": 1.0 } }, {}]') do |event|
-            expect( event.include?("foo") ).to be false
-            expect( event.include?("baz") ).to be false
-            count += 1
-            case count
-            when 1
-              expect( event.get("[root][foo]") ).to eql 'bar'
-            when 2
-              expect( event.get("[root][baz]") ).to eql 'v' => 1.0
+        context "with target" do
+
+          let(:options) { super().merge('target' => 'root') }
+
+          let(:message) { ' { "foo": "bar", "baz": { "0": [1, 2, 3], "1": true } } ' }
+
+          context 'sample json' do
+
+            let(:json) { '{ "foo": "bar", "baz": { "0": [1, 2, 3], "1": true } } ' }
+
+            it "yields an event" do
+              count = 0
+              subject.decode(json) do |event|
+                count += 1
+                expect( event.include?("foo") ).to be false
+                expect( event.include?("baz") ).to be false
+                expect( event.get("[root][foo]") ).to eql 'bar'
+                expect( event.get("[root][baz]")['1'] ).to be true
+              end
+              expect( count ).to eql 1
             end
+
+            it 'set event.original in ECS mode' do
+              subject.decode(json) do |event|
+                if ecs_select.active_mode == :disabled
+                  expect( event.get("[event][original]") ).to be nil
+                else
+                  expect( event.get("[event][original]") ).to eql json
+                end
+              end
+            end
+
           end
-          expect( count ).to eql 3
+
+          context 'json array' do
+
+            let(:json) { '[ {"foo": "bar"}, {"baz": { "v": 1.0 } }, {}]' }
+
+            it "yields multiple events" do
+              count = 0
+              subject.decode(json) do |event|
+                expect( event.include?("foo") ).to be false
+                expect( event.include?("baz") ).to be false
+                count += 1
+                case count
+                when 1
+                  expect( event.get("[root][foo]") ).to eql 'bar'
+                when 2
+                  expect( event.get("[root][baz]") ).to eql 'v' => 1.0
+                end
+              end
+              expect( count ).to eql 3
+            end
+
+            it 'does not set event.original' do
+              subject.decode(json) do |event|
+                expect( event.include?("[event][original]") ).to be false
+              end
+            end
+
+          end
+
         end
 
       end
-
     end
 
     context "#encode" do

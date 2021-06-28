@@ -22,7 +22,7 @@ require 'logstash/plugin_mixins/event_support/from_json_helper'
 # failure, the payload will be stored in the `message` field.
 class LogStash::Codecs::JSON < LogStash::Codecs::Base
 
-  include LogStash::PluginMixins::ECSCompatibilitySupport
+  include LogStash::PluginMixins::ECSCompatibilitySupport(:disabled, :v1, :v8 => :v1)
   include LogStash::PluginMixins::ECSCompatibilitySupport::TargetCheck
 
   extend LogStash::PluginMixins::ValidatorSupport::FieldReferenceValidationAdapter
@@ -48,9 +48,17 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
   # The target is only relevant while decoding data into a new event.
   config :target, :validate => :field_reference
 
-  def register
+  def initialize(*params)
+    super
+
+    @original_field = ecs_select[disabled: nil, v1: '[event][original]']
+
     @converter = LogStash::Util::Charset.new(@charset)
     @converter.logger = @logger
+  end
+
+  def register
+    # no-op
   end
 
   def decode(data, &block)
@@ -64,7 +72,14 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
   private
 
   def parse_json(json)
-    events_from_json(json, targeted_event_factory).each { |event| yield event }
+    events = events_from_json(json, targeted_event_factory)
+    if events.size == 1
+      event = events.first
+      event.set(@original_field, json) if @original_field
+      yield event
+    else
+      events.each { |event| yield event }
+    end
   rescue => e
     @logger.error("JSON parse error, original data now in message field", message: e.message, exception: e.class, data: json)
     yield parse_json_error_event(json)
