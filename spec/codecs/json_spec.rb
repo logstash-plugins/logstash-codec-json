@@ -150,6 +150,20 @@ describe LogStash::Codecs::JSON do
           end
         end
       end
+
+      context "with target" do
+
+        let(:options) { super().merge('target' => 'root') }
+
+        let(:message) { ' { "foo": "bar", "baz": { "0": [1, 2, 3], "1": true } } ' }
+
+        it "parses json" do
+          count = 0
+          subject.decode('{ "foo": "bar", "baz": { "0": [1, 2, 3], "1": true } } ') do |event|
+            count += 1
+            expect( event.include?("foo") ).to be false
+            expect( event.include?("baz") ).to be false
+            expect( event.get("[root][foo]") ).to eql 'bar'
             expect( event.get("[root][baz]")['1'] ).to be true
           end
           expect( count ).to eql 1
@@ -158,10 +172,15 @@ describe LogStash::Codecs::JSON do
         it "parses json (array)" do
           count = 0
           subject.decode('[ {"foo": "bar"}, {"baz": { "v": 1.0 } }, {}]') do |event|
-            count += 1
             expect( event.include?("foo") ).to be false
             expect( event.include?("baz") ).to be false
-            expect( event.include?("root") ).to be true if count < 3
+            count += 1
+            case count
+            when 1
+              expect( event.get("[root][foo]") ).to eql 'bar'
+            when 2
+              expect( event.get("[root][baz]") ).to eql 'v' => 1.0
+            end
           end
           expect( count ).to eql 3
         end
