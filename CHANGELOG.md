@@ -1,3 +1,7 @@
+## 3.1.0
+  - Feat: event `target => namespace` support (for ECS) [#37](https://github.com/logstash-plugins/logstash-codec-json/pull/37)
+  - Refactor: dropped support for old Logstash versions (< 6.0)
+
 ## 3.0.5
   - Update gemspec summary
 
