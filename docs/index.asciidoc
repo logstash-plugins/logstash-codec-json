@@ -83,14 +83,13 @@ For nxlog users, you may to set this to "CP1252".
 Define the target field for placing the parsed data. If this setting is not
 set, the JSON data will be stored at the root (top level) of the event.
 
-For example, if you want data to be put under the `redis` field:
+For example, if you want data to be put under the `document` field:
 [source,ruby]
     input {
-      redis {
+      http {
         codec => json {
-          target => "[redis]"
+          target => "[document]"
         }
       }
     }
-
 
