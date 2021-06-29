@@ -57,7 +57,6 @@ failure, the payload will be stored in the `message` field.
     ** Otherwise, the default value is `disabled`
 
 Controls this plugin's compatibility with the {ecs-ref}[Elastic Common Schema (ECS)].
-See <<plugins-{type}s-{plugin}-ecs_metadata>> for detailed information.
 
 [id="plugins-{type}s-{plugin}-charset"]
 ===== `charset` 
