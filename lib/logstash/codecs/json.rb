@@ -3,6 +3,11 @@ require "logstash/codecs/base"
 require "logstash/util/charset"
 require "logstash/json"
 require "logstash/event"
+require 'logstash/plugin_mixins/ecs_compatibility_support'
+require 'logstash/plugin_mixins/ecs_compatibility_support/target_check'
+require 'logstash/plugin_mixins/validator_support/field_reference_validation_adapter'
+require 'logstash/plugin_mixins/event_support/event_factory_adapter'
+require 'logstash/plugin_mixins/event_support/from_json_helper'
 
 # This codec may be used to decode (via inputs) and encode (via outputs)
 # full JSON messages. If the data being sent is a JSON array at its root multiple events will be created (one per element).
@@ -16,10 +21,19 @@ require "logstash/event"
 # it will fall back to plain text and add a tag `_jsonparsefailure`. Upon a JSON
 # failure, the payload will be stored in the `message` field.
 class LogStash::Codecs::JSON < LogStash::Codecs::Base
+
+  include LogStash::PluginMixins::ECSCompatibilitySupport(:disabled, :v1, :v8 => :v1)
+  include LogStash::PluginMixins::ECSCompatibilitySupport::TargetCheck
+
+  extend LogStash::PluginMixins::ValidatorSupport::FieldReferenceValidationAdapter
+
+  include LogStash::PluginMixins::EventSupport::EventFactoryAdapter
+  include LogStash::PluginMixins::EventSupport::FromJsonHelper
+
   config_name "json"
 
-  # The character encoding used in this codec. Examples include "UTF-8" and
-  # "CP1252".
+  # The character encoding used in this codec.
+  # Examples include "UTF-8" and "CP1252".
   #
   # JSON requires valid UTF-8 strings, but in some cases, software that
   # emits JSON does so in another encoding (nxlog, for example). In
@@ -29,13 +43,26 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
   # For nxlog users, you may to set this to "CP1252".
   config :charset, :validate => ::Encoding.name_list, :default => "UTF-8"
 
-  def register
+  # Defines a target field for placing decoded fields.
+  # If this setting is omitted, data gets stored at the root (top level) of the event.
+  # The target is only relevant while decoding data into a new event.
+  config :target, :validate => :field_reference
+
+  def initialize(*params)
+    super
+
+    @original_field = ecs_select[disabled: nil, v1: '[event][original]']
+
     @converter = LogStash::Util::Charset.new(@charset)
     @converter.logger = @logger
   end
 
+  def register
+    # no-op
+  end
+
   def decode(data, &block)
-    parse(@converter.convert(data), &block)
+    parse_json(@converter.convert(data), &block)
   end
 
   def encode(event)
@@ -44,42 +71,22 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
 
   private
 
-  def from_json_parse(json, &block)
-    LogStash::Event.from_json(json).each { |event| yield event }
-  rescue LogStash::Json::ParserError => e
-    @logger.error("JSON parse error, original data now in message field", :error => e, :data => json)
-    yield LogStash::Event.new("message" => json, "tags" => ["_jsonparsefailure"])
-  end
-
-  def legacy_parse(json, &block)
-    decoded = LogStash::Json.load(json)
-
-    case decoded
-    when Array
-      decoded.each {|item| yield(LogStash::Event.new(item)) }
-    when Hash
-      yield LogStash::Event.new(decoded)
+  def parse_json(json)
+    events = events_from_json(json, targeted_event_factory)
+    if events.size == 1
+      event = events.first
+      event.set(@original_field, json) if @original_field
+      yield event
     else
-      @logger.error("JSON codec is expecting array or object/map", :data => json)
-      yield LogStash::Event.new("message" => json, "tags" => ["_jsonparsefailure"])
+      events.each { |event| yield event }
     end
-  rescue LogStash::Json::ParserError => e
-    @logger.info("JSON parse failure. Falling back to plain-text", :error => e, :data => json)
-    yield LogStash::Event.new("message" => json, "tags" => ["_jsonparsefailure"])
-  rescue StandardError => e
-    # This should NEVER happen. But hubris has been the cause of many pipeline breaking things
-    # If something bad should happen we just don't want to crash logstash here.
-    @logger.warn(
-      "An unexpected error occurred parsing JSON data",
-      :data => json,
-      :message => e.message,
-      :class => e.class.name,
-      :backtrace => e.backtrace
-    )
+  rescue => e
+    @logger.error("JSON parse error, original data now in message field", message: e.message, exception: e.class, data: json)
+    yield parse_json_error_event(json)
   end
 
-  # keep compatibility with all v2.x distributions. only in 2.3 will the Event#from_json method be introduced
-  # and we need to keep compatibility for all v2 releases.
-  alias_method :parse, LogStash::Event.respond_to?(:from_json) ? :from_json_parse : :legacy_parse
+  def parse_json_error_event(json)
+    event_factory.new_event("message" => json, "tags" => ["_jsonparsefailure"])
+  end
 
 end

@@ -3,10 +3,14 @@ require "logstash/codecs/json"
 require "logstash/event"
 require "logstash/json"
 require "insist"
+require 'logstash/plugin_mixins/ecs_compatibility_support/spec_helper'
 
-describe LogStash::Codecs::JSON do
+describe LogStash::Codecs::JSON, :ecs_compatibility_support do
+
+  let(:options) { Hash.new }
+
   subject do
-    LogStash::Codecs::JSON.new
+    LogStash::Codecs::JSON.new(options)
   end
 
   shared_examples :codec do
@@ -127,7 +131,7 @@ describe LogStash::Codecs::JSON do
 
       context "when json could not be parsed" do
 
-        let(:message)    { "random_message" }
+        let(:message) { "random_message" }
 
         it "add the failure tag" do
           subject.decode(message) do |event|
@@ -147,6 +151,78 @@ describe LogStash::Codecs::JSON do
           end
         end
       end
+
+      ecs_compatibility_matrix(:disabled, :v1, :v8 => :v1) do |ecs_select|
+
+        before(:each) do
+          allow_any_instance_of(described_class).to receive(:ecs_compatibility).and_return(ecs_compatibility)
+        end
+
+        context "with target" do
+
+          let(:options) { super().merge('target' => 'root') }
+
+          let(:message) { ' { "foo": "bar", "baz": { "0": [1, 2, 3], "1": true } } ' }
+
+          context 'sample json' do
+
+            let(:json) { '{ "foo": "bar", "baz": { "0": [1, 2, 3], "1": true } } ' }
+
+            it "yields an event" do
+              count = 0
+              subject.decode(json) do |event|
+                count += 1
+                expect( event.include?("foo") ).to be false
+                expect( event.include?("baz") ).to be false
+                expect( event.get("[root][foo]") ).to eql 'bar'
+                expect( event.get("[root][baz]")['1'] ).to be true
+              end
+              expect( count ).to eql 1
+            end
+
+            it 'set event.original in ECS mode' do
+              subject.decode(json) do |event|
+                if ecs_select.active_mode == :disabled
+                  expect( event.get("[event][original]") ).to be nil
+                else
+                  expect( event.get("[event][original]") ).to eql json
+                end
+              end
+            end
+
+          end
+
+          context 'json array' do
+
+            let(:json) { '[ {"foo": "bar"}, {"baz": { "v": 1.0 } }, {}]' }
+
+            it "yields multiple events" do
+              count = 0
+              subject.decode(json) do |event|
+                expect( event.include?("foo") ).to be false
+                expect( event.include?("baz") ).to be false
+                count += 1
+                case count
+                when 1
+                  expect( event.get("[root][foo]") ).to eql 'bar'
+                when 2
+                  expect( event.get("[root][baz]") ).to eql 'v' => 1.0
+                end
+              end
+              expect( count ).to eql 3
+            end
+
+            it 'does not set event.original' do
+              subject.decode(json) do |event|
+                expect( event.include?("[event][original]") ).to be false
+              end
+            end
+
+          end
+
+        end
+
+      end
     end
 
     context "#encode" do
@@ -165,27 +241,27 @@ describe LogStash::Codecs::JSON do
         insist { got_event }
       end
     end
-  end
 
-  context "forcing legacy parsing" do
-    it_behaves_like :codec do
-      before(:each) do
-        # stub codec parse method to force use of the legacy parser.
-        # this is very implementation specific but I am not sure how
-        # this can be tested otherwise.
-        allow(subject).to receive(:parse) do |data, &block|
-          subject.send(:legacy_parse, data, &block)
+    context "target" do
+      it "should return json data" do
+        data = {"foo" => "bar", "baz" => {"bah" => ["a","b","c"]}}
+        event = LogStash::Event.new(data)
+        got_event = false
+        subject.on_event do |e, d|
+          insist { d.chomp } == event.to_json
+          insist { LogStash::Json.load(d)["foo"] } == data["foo"]
+          insist { LogStash::Json.load(d)["baz"] } == data["baz"]
+          insist { LogStash::Json.load(d)["bah"] } == data["bah"]
+          got_event = true
         end
+        subject.encode(event)
+        insist { got_event }
       end
     end
   end
 
   context "default parser choice" do
-    # here we cannot force the use of the Event#from_json since if this test is run in the
-    # legacy context (no Java Event) it will fail but if in the new context, it will be picked up.
-    it_behaves_like :codec do
-      # do nothing
-    end
+    it_behaves_like :codec
   end
 
 end
