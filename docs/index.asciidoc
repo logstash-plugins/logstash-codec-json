@@ -64,13 +64,13 @@ For nxlog users, you may to set this to "CP1252".
 [id="plugins-{type}s-{plugin}-ecs_compatibility"]
 ===== `ecs_compatibility`
 
-* Value type is <<string,string>>
-* Supported values are:
-** `disabled`: does not use ECS-compatible field names
-** `v1`: Elastic Common Schema compliant behavior (warns when `target` isn't set)
-* Default value depends on which version of Logstash is running:
-** When Logstash provides a `pipeline.ecs_compatibility` setting, its value is used as the default
-** Otherwise, the default value is `disabled`
+  * Value type is <<string,string>>
+  * Supported values are:
+    ** `disabled`: does not use ECS-compatible field names
+    ** `v1`,`v8`: Elastic Common Schema compliant behavior (warns when `target` isn't set)
+  * Default value depends on which version of Logstash is running:
+    ** When Logstash provides a `pipeline.ecs_compatibility` setting, its value is used as the default
+    ** Otherwise, the default value is `disabled`
 
 Controls this plugin's compatibility with the {ecs-ref}[Elastic Common Schema (ECS)].
 
