@@ -75,7 +75,7 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
     events = events_from_json(json, targeted_event_factory)
     if events.size == 1
       event = events.first
-      event.set(@original_field, json.freeze) if @original_field
+      event.set(@original_field, json.dup.freeze) if @original_field
       yield event
     else
       events.each { |event| yield event }
