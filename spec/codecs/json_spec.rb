@@ -222,6 +222,19 @@ describe LogStash::Codecs::JSON, :ecs_compatibility_support do
 
         end
 
+        context 'when JSON-coded event includes [event][original]' do
+          let(:message) { ' { "foo": "bar", "baz": { "0": [1, 2, 3], "1": true }, "event" : { "original" : "actual_original" } } ' }
+
+          it 'does not overwrite [event][original]' do
+            count = 0
+            subject.decode(message) do |event|
+              count += 1
+              expect( event.get('[event][original]') ).to eq("actual_original")
+            end
+            expect( count ).to eql 1
+          end
+        end
+
       end
     end
 

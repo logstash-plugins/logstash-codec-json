@@ -1,3 +1,6 @@
+## 3.1.1
+  - Fix: when decoded JSON includes an `[event][original]` field, having `ecs_compatibility` enabled will no longer overwrite the decoded field [#43](https://github.com/logstash-plugins/logstash-codec-json/pull/43)
+
 ## 3.1.0
   - Feat: event `target => namespace` support (for ECS) [#37](https://github.com/logstash-plugins/logstash-codec-json/pull/37)
   - Refactor: dropped support for old Logstash versions (< 6.0)
