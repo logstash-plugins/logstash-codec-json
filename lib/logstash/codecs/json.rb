@@ -80,9 +80,22 @@ class LogStash::Codecs::JSON < LogStash::Codecs::Base
     else
       events.each { |event| yield event }
     end
-  rescue => e
-    @logger.error("JSON parse error, original data now in message field", message: e.message, exception: e.class, data: json)
+  rescue LogStash::Json::ParserError => e
+    log_parse_error(e, json)
     yield parse_json_error_event(json)
+  rescue => e
+    # This should NEVER happen. But hubris has been the cause of many pipeline breaking things
+    log_generic_error(e, json)
+    yield parse_json_error_event(json)
+  end
+
+  def log_parse_error(e, json)
+    @logger.warn("JSON parse error, original data now in message field", message: e.message, exception: e.class, data: json)
+  end
+
+  def log_generic_error(e, json)
+    @logger.error("An unexpected error occurred parsing JSON data, original data now in message field",
+                  message: e.message, exception: e.class, backtrace: e.backtrace, data: json)
   end
 
   def parse_json_error_event(json)
